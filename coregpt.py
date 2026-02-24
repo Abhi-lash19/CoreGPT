@@ -1,7 +1,7 @@
 """
 CoreGPT
 
-Phase 7 — Text Generation Added
+Phase 8 — Positional Embeddings + Multi-Head Attention
 """
 
 import os
@@ -160,7 +160,54 @@ def apply_causal_mask(scores):
 
 
 # =========================================================
-# PHASE 4 — ATTENTION LAYER
+# POSITIONAL EMBEDDING (NEW)
+# =========================================================
+
+class PositionalEmbedding:
+    def __init__(self, block_size, embed_dim):
+        self.weight = random_matrix(block_size, embed_dim)
+
+    def forward(self, length):
+        return self.weight[:length]
+
+
+# =========================================================
+# MULTI HEAD ATTENTION (NEW)
+# =========================================================
+
+class MultiHeadAttention:
+    def __init__(self, embed_dim, num_heads=2):
+        self.num_heads = num_heads
+        self.head_dim = embed_dim // num_heads
+        self.heads = [SelfAttention(self.head_dim) for _ in range(num_heads)]
+        self.proj = Linear(embed_dim, embed_dim)
+
+    def split_heads(self, x):
+        split = []
+        for head in range(self.num_heads):
+            start = head * self.head_dim
+            end = start + self.head_dim
+            split.append([row[start:end] for row in x])
+        return split
+
+    def concat_heads(self, heads):
+        concat = []
+        for i in range(len(heads[0])):
+            row = []
+            for h in heads:
+                row.extend(h[i])
+            concat.append(row)
+        return concat
+
+    def forward(self, x):
+        heads_in = self.split_heads(x)
+        heads_out = [h.forward(heads_in[i]) for i, h in enumerate(self.heads)]
+        concat = self.concat_heads(heads_out)
+        return self.proj.forward(concat)
+
+
+# =========================================================
+# ATTENTION LAYER (single head used internally)
 # =========================================================
 
 class SelfAttention:
@@ -219,29 +266,28 @@ class Linear:
 
 class TinyLanguageModel:
     def __init__(self, vocab_size):
-        self.embedding = Embedding(vocab_size, Config.embed_dim)
-        self.attention = SelfAttention(Config.embed_dim)
+        self.token_embedding = Embedding(vocab_size, Config.embed_dim)
+        self.pos_embedding = PositionalEmbedding(Config.block_size, Config.embed_dim)
+        self.attention = MultiHeadAttention(Config.embed_dim, num_heads=2)
         self.linear = Linear(Config.embed_dim, vocab_size)
 
     def forward(self, tokens):
-        """
-        Standard forward pass used by inference/tests.
-        Returns logits only.
-        """
-        emb = self.embedding.forward(tokens)
-        attn = self.attention.forward(emb)
-        logits = self.linear.forward(attn)
+        tok_emb = self.token_embedding.forward(tokens)
+        pos_emb = self.pos_embedding.forward(len(tokens))
+
+        x = [[tok_emb[i][j] + pos_emb[i][j] for j in range(len(tok_emb[i]))] for i in range(len(tokens))]
+        x = self.attention.forward(x)
+        logits = self.linear.forward(x)
         return logits
 
     def _forward_with_hidden(self, tokens):
-        """
-        Internal forward pass used during training.
-        Returns logits + hidden states for gradients.
-        """
-        emb = self.embedding.forward(tokens)
-        attn = self.attention.forward(emb)
-        logits = self.linear.forward(attn)
-        return logits, attn
+        tok_emb = self.token_embedding.forward(tokens)
+        pos_emb = self.pos_embedding.forward(len(tokens))
+
+        x = [[tok_emb[i][j] + pos_emb[i][j] for j in range(len(tok_emb[i]))] for i in range(len(tokens))]
+        x = self.attention.forward(x)
+        logits = self.linear.forward(x)
+        return logits, x
 
 
 # =========================================================
@@ -302,7 +348,7 @@ def train_step(model, x, y, lr=1e-2):
 
 
 # =========================================================
-# GENERATION (NEW)
+# GENERATION
 # =========================================================
 
 def sample_next_token(logits, temperature=1.0):
@@ -368,11 +414,11 @@ def main(verbose: bool = True):
     for step in range(1000):
         xb, yb = get_batch(train_data, Config.block_size, 1)
         loss = train_step(model, xb[0], yb[0])
-        if step % 5 == 0:
+        if step % 50 == 0:
             print(f"[Step {step}] loss = {loss:.4f}")
 
     print("\n--- Generated Text ---\n")
-    output = generate_text(model, tokenizer, "CoreGPT ", 200, temperature=0.8)
+    output = generate_text(model, tokenizer, "CoreGPT ", 200, temperature=0.6)
     print(output)
 
 
