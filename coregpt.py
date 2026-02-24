@@ -14,6 +14,7 @@ Includes:
 
 import os
 import random
+import math
 from typing import List, Tuple
 from config import Config
 
@@ -128,21 +129,130 @@ def get_batch(
 
 
 # =========================================================
+# PHASE 3 — MATRIX UTILITIES
+# =========================================================
+
+def random_matrix(rows: int, cols: int):
+    return [[random.uniform(-0.02, 0.02) for _ in range(cols)] for _ in range(rows)]
+
+
+def matmul(a, b):
+    result = [[0.0 for _ in range(len(b[0]))] for _ in range(len(a))]
+    for i in range(len(a)):
+        for j in range(len(b[0])):
+            for k in range(len(b)):
+                result[i][j] += a[i][k] * b[k][j]
+    return result
+
+
+# =========================================================
+# PHASE 4 — ATTENTION UTILITIES
+# =========================================================
+
+def softmax(vec):
+    max_val = max(vec)
+    exps = [math.exp(v - max_val) for v in vec]
+    s = sum(exps)
+    return [e / s for e in exps]
+
+
+def transpose(m):
+    return list(map(list, zip(*m)))
+
+
+def apply_causal_mask(scores):
+    size = len(scores)
+    for i in range(size):
+        for j in range(i + 1, size):
+            scores[i][j] = -1e9
+    return scores
+
+
+# =========================================================
+# PHASE 4 — ATTENTION LAYER
+# =========================================================
+
+class SelfAttention:
+    def __init__(self, embed_dim: int):
+        self.query = Linear(embed_dim, embed_dim)
+        self.key = Linear(embed_dim, embed_dim)
+        self.value = Linear(embed_dim, embed_dim)
+        self.scale = math.sqrt(embed_dim)
+
+    def forward(self, x):
+        Q = self.query.forward(x)
+        K = self.key.forward(x)
+        V = self.value.forward(x)
+
+        KT = transpose(K)
+        scores = matmul(Q, KT)
+
+        for i in range(len(scores)):
+            for j in range(len(scores[i])):
+                scores[i][j] /= self.scale
+
+        scores = apply_causal_mask(scores)
+        weights = [softmax(row) for row in scores]
+        out = matmul(weights, V)
+
+        return out
+
+
+# =========================================================
+# PHASE 3 — MODEL LAYERS
+# =========================================================
+
+class Embedding:
+    def __init__(self, vocab_size: int, embed_dim: int):
+        self.weight = random_matrix(vocab_size, embed_dim)
+
+    def forward(self, tokens: List[int]):
+        return [self.weight[t] for t in tokens]
+
+
+class Linear:
+    def __init__(self, in_dim: int, out_dim: int):
+        self.weight = random_matrix(in_dim, out_dim)
+        self.bias = [0.0] * out_dim
+
+    def forward(self, x):
+        out = matmul(x, self.weight)
+        for row in out:
+            for i in range(len(row)):
+                row[i] += self.bias[i]
+        return out
+
+
+# =========================================================
+# PHASE 4 — MODEL
+# =========================================================
+
+class TinyLanguageModel:
+    def __init__(self, vocab_size: int):
+        self.embedding = Embedding(vocab_size, Config.embed_dim)
+        self.attention = SelfAttention(Config.embed_dim)
+        self.linear = Linear(Config.embed_dim, vocab_size)
+
+    def forward(self, tokens: List[int]):
+        x = self.embedding.forward(tokens)
+        x = self.attention.forward(x)
+        logits = self.linear.forward(x)
+        return logits
+
+
+# =========================================================
 # MAIN
 # =========================================================
 
 def main(verbose: bool = True):
     if verbose:
-        print("\n=== CoreGPT Phase 2 ===\n")
+        print("\n=== CoreGPT Phase 4 ===\n")
 
     # 1️Load dataset
     text = load_dataset(Config.dataset_path)
 
     # 2️Build tokenizer
     tokenizer = CharTokenizer(text)
-    if verbose:
-        print(f"[Tokenizer] vocab_size={tokenizer.vocab_size}")
-
     # 3️Encode entire dataset
     data = tokenizer.encode(text)
 
@@ -150,21 +260,17 @@ def main(verbose: bool = True):
     train_data, val_data = train_val_split(data)
 
     # 5️Sample batch from train set
-    xb, yb = get_batch(
-        train_data,
-        Config.block_size,
-        Config.batch_size
-    )
+    xb, yb = get_batch(train_data, Config.block_size, Config.batch_size)
+
+    # preview after batch exists
+    
+
+    model = TinyLanguageModel(tokenizer.vocab_size)
+    logits = model.forward(xb[0])
+    print(tokenizer.decode(xb[0][:50]))
 
     if verbose:
-        print(f"[Batch] X={len(xb)}x{len(xb[0])} | Y={len(yb)}x{len(yb[0])}")
-
-        # Preview one example
-        print("\n[Preview]")
-        print("Input text:")
-        print(tokenizer.decode(xb[0][:80]))
-        print("\nTarget text:")
-        print(tokenizer.decode(yb[0][:80]))
+        print(f"[Forward] logits shape = {len(logits)} x {len(logits[0])}")
 
 
 if __name__ == "__main__":
