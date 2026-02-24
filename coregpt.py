@@ -1,15 +1,7 @@
 """
 CoreGPT
 
-Phase 2 — Data Pipeline
-
-Includes:
-- Character tokenizer
-- Vocabulary creation
-- Encoding / decoding
-- Train/validation split
-- Random batch sampling
-- Deterministic behavior (seed)
+Phase 7 — Text Generation Added
 """
 
 import os
@@ -308,13 +300,47 @@ def train_step(model, x, y, lr=1e-2):
 
     return loss
 
+
+# =========================================================
+# GENERATION (NEW)
+# =========================================================
+
+def sample_next_token(logits, temperature=1.0):
+    """Sample token from probability distribution."""
+    scaled = [v / temperature for v in logits]
+    probs = softmax(scaled)
+
+    r = random.random()
+    cumulative = 0.0
+    for i, p in enumerate(probs):
+        cumulative += p
+        if r < cumulative:
+            return i
+    return len(probs) - 1
+
+
+def generate_text(model, tokenizer, prompt, max_new_tokens=100, temperature=1.0):
+    """
+    Autoregressive text generation.
+    """
+    tokens = tokenizer.encode(prompt)
+
+    for _ in range(max_new_tokens):
+        context = tokens[-Config.block_size:]
+        logits = model.forward(context)
+        next_token = sample_next_token(logits[-1], temperature)
+        tokens.append(next_token)
+
+    return tokenizer.decode(tokens)
+
+
 # =========================================================
 # MAIN
 # =========================================================
 
 def main(verbose: bool = True):
     if verbose:
-        print("\n=== CoreGPT Phase 5 ===\n")
+        print("\n=== CoreGPT Phase 7 ===\n")
 
     # 1️Load dataset
     text = load_dataset(Config.dataset_path)
@@ -324,8 +350,7 @@ def main(verbose: bool = True):
     # 3️Encode entire dataset
     data = tokenizer.encode(text)
 
-    # 4️Train/val split
-    train_data, val_data = train_val_split(data)
+    train_data, _ = train_val_split(data)
 
     # 5️ Sample batch from train set (single sample for training step)
     xb, yb = get_batch(train_data, Config.block_size, 1)
@@ -340,10 +365,15 @@ def main(verbose: bool = True):
     # 6️ Initialize model
     model = TinyLanguageModel(tokenizer.vocab_size)
 
-    for step in range(5):
+    for step in range(1000):
         xb, yb = get_batch(train_data, Config.block_size, 1)
         loss = train_step(model, xb[0], yb[0])
-        print(f"[Step {step}] loss = {loss:.4f}")
+        if step % 5 == 0:
+            print(f"[Step {step}] loss = {loss:.4f}")
+
+    print("\n--- Generated Text ---\n")
+    output = generate_text(model, tokenizer, "CoreGPT ", 200, temperature=0.8)
+    print(output)
 
 
 if __name__ == "__main__":
