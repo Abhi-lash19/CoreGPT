@@ -1,0 +1,3 @@
+CoreGPT is a tiny language model built from scratch.
+It learns patterns in text and predicts the next character.
+This project is designed for educational purposes.
