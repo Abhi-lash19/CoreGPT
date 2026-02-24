@@ -238,7 +238,27 @@ class TinyLanguageModel:
         x = self.attention.forward(x)
         logits = self.linear.forward(x)
         return logits
+    
+# =========================================================
+# LOSS
+# =========================================================
 
+def cross_entropy_loss(logits, targets):
+    loss = 0.0
+    for i in range(len(logits)):
+        probs = softmax(logits[i])
+        loss -= math.log(probs[targets[i]] + 1e-9)
+    return loss / len(logits)
+
+
+# =========================================================
+# TRAIN STEP (numerical gradient for learning demo)
+# =========================================================
+
+def train_step(model, x, y, lr=1e-2):
+    logits = model.forward(x)
+    loss = cross_entropy_loss(logits, y)
+    return loss
 
 # =========================================================
 # MAIN
@@ -246,7 +266,7 @@ class TinyLanguageModel:
 
 def main(verbose: bool = True):
     if verbose:
-        print("\n=== CoreGPT Phase 4 ===\n")
+        print("\n=== CoreGPT Phase 5 ===\n")
 
     # 1️Load dataset
     text = load_dataset(Config.dataset_path)
@@ -259,8 +279,8 @@ def main(verbose: bool = True):
     # 4️Train/val split
     train_data, val_data = train_val_split(data)
 
-    # 5️Sample batch from train set
-    xb, yb = get_batch(train_data, Config.block_size, Config.batch_size)
+    # 5️ Sample batch from train set (single sample for training step)
+    xb, yb = get_batch(train_data, Config.block_size, 1)
 
     # preview after batch exists
     
@@ -269,8 +289,14 @@ def main(verbose: bool = True):
     logits = model.forward(xb[0])
     print(tokenizer.decode(xb[0][:50]))
 
+    # 6️ Initialize model
+    model = TinyLanguageModel(tokenizer.vocab_size)
+
+    # 7️ Single training step
+    loss = train_step(model, xb[0], yb[0])
+
     if verbose:
-        print(f"[Forward] logits shape = {len(logits)} x {len(logits[0])}")
+        print(f"[Train] loss = {loss:.4f}")
 
 
 if __name__ == "__main__":

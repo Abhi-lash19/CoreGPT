@@ -1,3 +1,17 @@
-CoreGPT is a tiny language model built from scratch.
-It learns patterns in text and predicts the next character.
-This project is designed for educational purposes.
+CoreGPT is a tiny educational language model implemented entirely in pure Python.
+It demonstrates how modern transformer-based models work internally.
+
+The model reads text one character at a time and learns patterns
+by predicting the next character in a sequence. Over time it adjusts
+its internal parameters to minimize prediction error.
+
+This project focuses on clarity and learning rather than performance.
+Each component such as tokenization, embeddings, attention, and loss
+is implemented from scratch without using machine learning libraries.
+
+By training on simple text, CoreGPT gradually learns structure,
+punctuation patterns, and word boundaries. Although small,
+it mirrors the fundamental ideas behind large language models.
+
+Understanding these mechanisms provides strong intuition about
+how real-world models like GPT operate under the hood.
