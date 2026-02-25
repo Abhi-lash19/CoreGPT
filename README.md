@@ -357,14 +357,3 @@ Text → Tokens → Vectors → Attention → Reasoning Layers → Prediction �
 Even though the model is small, the same principles scale up to large-scale LLMs used in real-world AI systems.
 
 ---
-
-## Key Takeaway
-
-Building CoreGPT shows that language models are not magic — they are a sequence of mathematical operations that:
-
-- represent text numerically
-- learn contextual relationships
-- refine patterns through layers
-- predict the next token step by step
-
-Understanding these mechanics provides strong intuition for how modern AI generates language.
