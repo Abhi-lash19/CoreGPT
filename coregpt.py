@@ -1,7 +1,7 @@
 """
 CoreGPT
 
-Phase 8 — Positional Embeddings + Multi-Head Attention
+Phase 10 — Residual Connections Added
 """
 
 import os
@@ -309,8 +309,12 @@ class TinyLanguageModel:
         pos_emb = self.pos_embedding.forward(len(tokens))
 
         x = [[tok_emb[i][j] + pos_emb[i][j] for j in range(len(tok_emb[i]))] for i in range(len(tokens))]
-        x = self.attention.forward(x)
-        x = self.ffn.forward(x)
+        attn_out = self.attention.forward(x)
+        x = [[x[i][j] + attn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
+
+        ffn_out = self.ffn.forward(x)
+        x = [[x[i][j] + ffn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
+
         logits = self.linear.forward(x)
         return logits
 
@@ -319,10 +323,13 @@ class TinyLanguageModel:
         pos_emb = self.pos_embedding.forward(len(tokens))
 
         x = [[tok_emb[i][j] + pos_emb[i][j] for j in range(len(tok_emb[i]))] for i in range(len(tokens))]
-        x = self.attention.forward(x)
-        x = self.ffn.forward(x)
+        attn_out = self.attention.forward(x)
+        x = [[x[i][j] + attn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
+
+        ffn_out = self.ffn.forward(x)
+        x = [[x[i][j] + ffn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
+
         logits = self.linear.forward(x)
-        return logits, x
         return logits, x
 
 
