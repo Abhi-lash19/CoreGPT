@@ -57,18 +57,25 @@ class CharTokenizer:
 
     def __init__(self, text: str):
         unique_chars = sorted(set(text))
-        self.vocab_size = len(unique_chars)
+        unique_chars.append("<UNK>")
 
+        self.vocab_size = len(unique_chars)
         self.stoi = {ch: i for i, ch in enumerate(unique_chars)}
         self.itos = {i: ch for i, ch in enumerate(unique_chars)}
+        self.unk_token = self.stoi["<UNK>"]
 
     def encode(self, text: str) -> List[int]:
-        """Convert text string to token indices."""
-        return [self.stoi[c] for c in text]
+        """Convert text string to token indices (safe)."""
+        return [self.stoi.get(c, self.unk_token) for c in text]
 
     def decode(self, tokens: List[int]) -> str:
         """Convert token indices back to string."""
-        return "".join(self.itos[t] for t in tokens)
+        chars = []
+        for t in tokens:
+            ch = self.itos.get(t, "")
+            if ch != "<UNK>":
+                chars.append(ch)
+        return "".join(chars)
 
 
 # =========================================================
@@ -258,6 +265,31 @@ class Linear:
             for i in range(len(row)):
                 row[i] += self.bias[i]
         return out
+    
+def relu(x):
+    return [[max(0.0, v) for v in row] for row in x]
+
+
+# =========================================================
+# FEED FORWARD NETWORK (NEW)
+# =========================================================
+
+class FeedForward:
+    """
+    Position-wise feed-forward network.
+    Expands embedding dimension then projects back.
+    """
+
+    def __init__(self, embed_dim):
+        hidden_dim = embed_dim * 4
+        self.fc1 = Linear(embed_dim, hidden_dim)
+        self.fc2 = Linear(hidden_dim, embed_dim)
+
+    def forward(self, x):
+        x = self.fc1.forward(x)
+        x = relu(x)
+        x = self.fc2.forward(x)
+        return x
 
 
 # =========================================================
@@ -269,6 +301,7 @@ class TinyLanguageModel:
         self.token_embedding = Embedding(vocab_size, Config.embed_dim)
         self.pos_embedding = PositionalEmbedding(Config.block_size, Config.embed_dim)
         self.attention = MultiHeadAttention(Config.embed_dim, num_heads=2)
+        self.ffn = FeedForward(Config.embed_dim)
         self.linear = Linear(Config.embed_dim, vocab_size)
 
     def forward(self, tokens):
@@ -277,6 +310,7 @@ class TinyLanguageModel:
 
         x = [[tok_emb[i][j] + pos_emb[i][j] for j in range(len(tok_emb[i]))] for i in range(len(tokens))]
         x = self.attention.forward(x)
+        x = self.ffn.forward(x)
         logits = self.linear.forward(x)
         return logits
 
@@ -286,7 +320,9 @@ class TinyLanguageModel:
 
         x = [[tok_emb[i][j] + pos_emb[i][j] for j in range(len(tok_emb[i]))] for i in range(len(tokens))]
         x = self.attention.forward(x)
+        x = self.ffn.forward(x)
         logits = self.linear.forward(x)
+        return logits, x
         return logits, x
 
 
