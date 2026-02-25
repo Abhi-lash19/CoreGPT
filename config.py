@@ -22,3 +22,8 @@ class Config:
     # ===== Paths =====
     dataset_path = "data/dataset.txt"
     checkpoint_path = "checkpoints/model.json"
+
+    # ===== Transformer Architecture =====
+    num_layers = 2
+    num_heads = 2
+    ffn_multiplier = 4

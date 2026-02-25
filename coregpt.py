@@ -310,6 +310,30 @@ class FeedForward:
         x = self.fc2.forward(x)
         return x
 
+# =========================================================
+# TRANSFORMER BLOCK (NEW)
+# =========================================================
+
+class TransformerBlock:
+    def __init__(self):
+        self.ln1 = LayerNorm(Config.embed_dim)
+        self.attn = MultiHeadAttention(Config.embed_dim, Config.num_heads)
+
+        self.ln2 = LayerNorm(Config.embed_dim)
+        self.ffn = FeedForward(Config.embed_dim)
+
+    def forward(self, x):
+        # attention with residual
+        x_norm = self.ln1.forward(x)
+        attn_out = self.attn.forward(x_norm)
+        x = [[x[i][j] + attn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
+
+        # ffn with residual
+        x_norm = self.ln2.forward(x)
+        ffn_out = self.ffn.forward(x_norm)
+        x = [[x[i][j] + ffn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
+
+        return x
 
 # =========================================================
 # MODEL
@@ -318,46 +342,26 @@ class FeedForward:
 class TinyLanguageModel:
     def __init__(self, vocab_size):
         self.token_embedding = Embedding(vocab_size, Config.embed_dim)
-        self.pos_embedding = PositionalEmbedding(Config.block_size, Config.embed_dim)
 
-        self.ln1 = LayerNorm(Config.embed_dim)
-        self.attention = MultiHeadAttention(Config.embed_dim, num_heads=2)
-
-        self.ln2 = LayerNorm(Config.embed_dim)
-        self.ffn = FeedForward(Config.embed_dim)
+        # stack multiple transformer blocks
+        self.blocks = [TransformerBlock() for _ in range(Config.num_layers)]
 
         self.linear = Linear(Config.embed_dim, vocab_size)
 
     def forward(self, tokens):
-        tok_emb = self.token_embedding.forward(tokens)
-        pos_emb = self.pos_embedding.forward(len(tokens))
+        x = self.token_embedding.forward(tokens)
 
-        x = [[tok_emb[i][j] + pos_emb[i][j] for j in range(len(tok_emb[i]))] for i in range(len(tokens))]
-        # attention block
-        x_norm = self.ln1.forward(x)
-        attn_out = self.attention.forward(x_norm)
-        x = [[x[i][j] + attn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
-
-        # feed forward block
-        x_norm = self.ln2.forward(x)
-        ffn_out = self.ffn.forward(x_norm)
-        x = [[x[i][j] + ffn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
+        for block in self.blocks:
+            x = block.forward(x)
 
         logits = self.linear.forward(x)
         return logits
 
     def _forward_with_hidden(self, tokens):
-        tok_emb = self.token_embedding.forward(tokens)
-        pos_emb = self.pos_embedding.forward(len(tokens))
+        x = self.token_embedding.forward(tokens)
 
-        x = [[tok_emb[i][j] + pos_emb[i][j] for j in range(len(tok_emb[i]))] for i in range(len(tokens))]
-        x_norm = self.ln1.forward(x)
-        attn_out = self.attention.forward(x_norm)
-        x = [[x[i][j] + attn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
-
-        x_norm = self.ln2.forward(x)
-        ffn_out = self.ffn.forward(x_norm)
-        x = [[x[i][j] + ffn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
+        for block in self.blocks:
+            x = block.forward(x)
 
         logits = self.linear.forward(x)
         return logits, x
