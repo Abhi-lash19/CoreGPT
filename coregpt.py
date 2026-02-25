@@ -1,7 +1,7 @@
 """
 CoreGPT
 
-Phase 10 — Residual Connections Added
+Small transformer-based language model implementation for learning and experimentation.
 """
 
 import os
@@ -12,25 +12,20 @@ from config import Config
 
 
 # =========================================================
-# REPRODUCIBILITY
+# RANDOM SEED (so results are repeatable between runs)
 # =========================================================
 
 random.seed(42)
 
 
 # =========================================================
-# DATASET
+# DATA LOADING
 # =========================================================
 
 def load_dataset(path: str) -> str:
     """
-    Reads dataset file and returns text.
-
-    Args:
-        path (str): Path to dataset file
-
-    Returns:
-        str: Raw text content
+    Open the dataset file and return its contents as a string.
+    Raises an error if the file path is invalid.
     """
     if not os.path.exists(path):
         raise FileNotFoundError(f"Dataset not found at {path}")
@@ -43,16 +38,13 @@ def load_dataset(path: str) -> str:
 
 
 # =========================================================
-# TOKENIZER
+# TOKENIZER (character level)
 # =========================================================
 
 class CharTokenizer:
     """
-    Character-level tokenizer.
-
-    Creates mapping:
-        char -> index
-        index -> char
+    Converts characters to numeric IDs and back.
+    Any unknown character maps to a special <UNK> token.
     """
 
     def __init__(self, text: str):
@@ -65,11 +57,11 @@ class CharTokenizer:
         self.unk_token = self.stoi["<UNK>"]
 
     def encode(self, text: str) -> List[int]:
-        """Convert text string to token indices (safe)."""
+        """Turn text into a list of token IDs."""
         return [self.stoi.get(c, self.unk_token) for c in text]
 
     def decode(self, tokens: List[int]) -> str:
-        """Convert token indices back to string."""
+        """Convert token IDs back into readable text."""
         chars = []
         for t in tokens:
             ch = self.itos.get(t, "")
@@ -79,12 +71,12 @@ class CharTokenizer:
 
 
 # =========================================================
-# SPLIT + BATCH
+# TRAIN / VALIDATION SPLIT
 # =========================================================
 
 def train_val_split(data: List[int], split_ratio: float = 0.9):
     """
-    Split token list into train and validation sets.
+    Split tokenized data into training and validation parts.
     """
     split_idx = int(len(data) * split_ratio)
     train_data = data[:split_idx]
@@ -95,7 +87,7 @@ def train_val_split(data: List[int], split_ratio: float = 0.9):
 
 
 # =========================================================
-# BATCH SAMPLER
+# BATCH SAMPLING
 # =========================================================
 
 def get_batch(
@@ -104,11 +96,8 @@ def get_batch(
     batch_size: int
 ) -> Tuple[List[List[int]], List[List[int]]]:
     """
-    Sample random training batch.
-
-    Returns:
-        X: input tokens
-        Y: shifted target tokens
+    Randomly sample chunks of tokens for training.
+    Y is just X shifted by one position.
     """
     if len(data) <= block_size:
         raise ValueError("Dataset too small for chosen block size")
@@ -123,14 +112,16 @@ def get_batch(
 
 
 # =========================================================
-# MATH UTILITIES
+# BASIC MATH HELPERS
 # =========================================================
 
 def random_matrix(rows, cols):
+    """Initialize a small random matrix."""
     return [[random.uniform(-0.02, 0.02) for _ in range(cols)] for _ in range(rows)]
 
 
 def matmul(a, b):
+    """Simple matrix multiplication (pure Python)."""
     result = [[0.0 for _ in range(len(b[0]))] for _ in range(len(a))]
     for i in range(len(a)):
         for j in range(len(b[0])):
@@ -140,10 +131,11 @@ def matmul(a, b):
 
 
 # =========================================================
-# PHASE 4 — ATTENTION UTILITIES
+# SOFTMAX
 # =========================================================
 
 def softmax(vec):
+    """Numerically stable softmax."""
     max_val = max(vec)
     exps = [math.exp(v - max_val) for v in vec]
     s = sum(exps)
@@ -151,7 +143,7 @@ def softmax(vec):
 
 
 # =========================================================
-# ATTENTION
+# ATTENTION HELPERS
 # =========================================================
 
 def transpose(m):
@@ -159,17 +151,25 @@ def transpose(m):
 
 
 def apply_causal_mask(scores):
+    """
+    Prevent tokens from attending to future positions.
+    """
     size = len(scores)
     for i in range(size):
         for j in range(i + 1, size):
             scores[i][j] = -1e9
     return scores
 
+
 # =========================================================
-# LAYER NORMALIZATION (NEW)
+# LAYER NORMALIZATION
 # =========================================================
 
 class LayerNorm:
+    """
+    Normalizes each token’s feature vector.
+    """
+
     def __init__(self, dim, eps=1e-5):
         self.gamma = [1.0] * dim
         self.beta = [0.0] * dim
@@ -185,11 +185,16 @@ class LayerNorm:
             normalized.append(norm_row)
         return normalized
 
+
 # =========================================================
-# POSITIONAL EMBEDDING (NEW)
+# POSITION EMBEDDING
 # =========================================================
 
 class PositionalEmbedding:
+    """
+    Learns a vector for each position in the sequence.
+    """
+
     def __init__(self, block_size, embed_dim):
         self.weight = random_matrix(block_size, embed_dim)
 
@@ -198,10 +203,14 @@ class PositionalEmbedding:
 
 
 # =========================================================
-# MULTI HEAD ATTENTION (NEW)
+# MULTI-HEAD ATTENTION
 # =========================================================
 
 class MultiHeadAttention:
+    """
+    Runs several attention heads in parallel, then merges them.
+    """
+
     def __init__(self, embed_dim, num_heads=2):
         self.num_heads = num_heads
         self.head_dim = embed_dim // num_heads
@@ -233,10 +242,14 @@ class MultiHeadAttention:
 
 
 # =========================================================
-# ATTENTION LAYER (single head used internally)
+# SINGLE ATTENTION HEAD
 # =========================================================
 
 class SelfAttention:
+    """
+    Standard scaled dot-product attention.
+    """
+
     def __init__(self, embed_dim):
         self.query = Linear(embed_dim, embed_dim)
         self.key = Linear(embed_dim, embed_dim)
@@ -262,10 +275,12 @@ class SelfAttention:
 
 
 # =========================================================
-# LAYERS
+# CORE LAYERS
 # =========================================================
 
 class Embedding:
+    """Lookup table that maps token IDs to vectors."""
+
     def __init__(self, vocab_size, embed_dim):
         self.weight = random_matrix(vocab_size, embed_dim)
 
@@ -274,6 +289,8 @@ class Embedding:
 
 
 class Linear:
+    """Fully connected layer."""
+
     def __init__(self, in_dim, out_dim):
         self.weight = random_matrix(in_dim, out_dim)
         self.bias = [0.0] * out_dim
@@ -284,19 +301,20 @@ class Linear:
             for i in range(len(row)):
                 row[i] += self.bias[i]
         return out
-    
+
+
 def relu(x):
+    """ReLU activation."""
     return [[max(0.0, v) for v in row] for row in x]
 
 
 # =========================================================
-# FEED FORWARD NETWORK (NEW)
+# FEED-FORWARD NETWORK
 # =========================================================
 
 class FeedForward:
     """
-    Position-wise feed-forward network.
-    Expands embedding dimension then projects back.
+    Expands dimension → applies non-linearity → projects back.
     """
 
     def __init__(self, embed_dim):
@@ -310,11 +328,18 @@ class FeedForward:
         x = self.fc2.forward(x)
         return x
 
+
 # =========================================================
-# TRANSFORMER BLOCK (NEW)
+# TRANSFORMER BLOCK
 # =========================================================
 
 class TransformerBlock:
+    """
+    One transformer layer:
+    LayerNorm → Attention → Residual
+    LayerNorm → FFN → Residual
+    """
+
     def __init__(self):
         self.ln1 = LayerNorm(Config.embed_dim)
         self.attn = MultiHeadAttention(Config.embed_dim, Config.num_heads)
@@ -335,11 +360,16 @@ class TransformerBlock:
 
         return x
 
+
 # =========================================================
-# MODEL
+# MODEL DEFINITION
 # =========================================================
 
 class TinyLanguageModel:
+    """
+    Small GPT-style language model built from scratch.
+    """
+
     def __init__(self, vocab_size):
         self.token_embedding = Embedding(vocab_size, Config.embed_dim)
 
@@ -368,14 +398,11 @@ class TinyLanguageModel:
 
 
 # =========================================================
-# LOSS
+# LOSS FUNCTIONS
 # =========================================================
 
 def cross_entropy_loss(logits, targets):
-    """
-    Computes scalar cross-entropy loss.
-    Public API used by tests.
-    """
+    """Average cross-entropy across sequence."""
     loss = 0.0
     for i in range(len(logits)):
         probs = softmax(logits[i])
@@ -400,12 +427,12 @@ def _loss_with_probs(logits, targets):
 
 
 # =========================================================
-# TRAIN STEP
+# TRAINING STEP
 # =========================================================
 
 def train_step(model, x, y, lr=1e-2):
     """
-    Single SGD update on output projection layer.
+    Performs one SGD update (only output layer for simplicity).
     """
     logits, hidden = model._forward_with_hidden(x)
     loss, probs = _loss_with_probs(logits, y)
@@ -423,8 +450,9 @@ def train_step(model, x, y, lr=1e-2):
 
     return loss
 
+
 # =========================================================
-# TRAIN LOOP (EPOCH TRAINING)
+# TRAIN LOOP
 # =========================================================
 
 def evaluate(model, data, tokenizer=None):
@@ -436,7 +464,7 @@ def evaluate(model, data, tokenizer=None):
 
 def train_model(model, train_data, val_data, epochs=5, steps_per_epoch=200):
     """
-    Realistic training loop with validation monitoring.
+    Basic epoch loop with validation monitoring.
     """
     for epoch in range(epochs):
 
@@ -454,11 +482,11 @@ def train_model(model, train_data, val_data, epochs=5, steps_per_epoch=200):
 
 
 # =========================================================
-# GENERATION
+# TEXT GENERATION
 # =========================================================
 
 def sample_next_token(logits, temperature=1.0):
-    """Sample token from probability distribution."""
+    """Sample from probability distribution with temperature."""
     scaled = [v / temperature for v in logits]
     probs = softmax(scaled)
 
@@ -473,7 +501,7 @@ def sample_next_token(logits, temperature=1.0):
 
 def generate_text(model, tokenizer, prompt, max_new_tokens=100, temperature=1.0):
     """
-    Autoregressive text generation.
+    Autoregressive generation loop.
     """
     tokens = tokenizer.encode(prompt)
 
@@ -487,7 +515,7 @@ def generate_text(model, tokenizer, prompt, max_new_tokens=100, temperature=1.0)
 
 
 # =========================================================
-# MAIN
+# ENTRY POINT
 # =========================================================
 
 def main(verbose: bool = True):
