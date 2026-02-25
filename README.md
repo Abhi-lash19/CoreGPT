@@ -63,16 +63,16 @@ Text → Tokenizer → Embeddings + Positional Encoding
 
 ### Components included
 
-✔ Character tokenizer with UNK support
-✔ Token embeddings
-✔ Positional embeddings
-✔ Multi-head causal self-attention
-✔ Layer normalization
-✔ Feed-forward network
-✔ Residual connections
-✔ Multiple transformer layers
-✔ Training loop with validation loss
-✔ Autoregressive text generation
+- Character tokenizer with UNK support
+- Token embeddings
+- Positional embeddings
+- Multi-head causal self-attention
+- Layer normalization
+- Feed-forward network
+- Residual connections
+- Multiple transformer layers
+- Training loop with validation loss
+- Autoregressive text generation
 
 ---
 
@@ -94,7 +94,7 @@ gradually improving predictions through attention mechanisms...
 ### Clone the repository
 
 ```bash
-git clone https://github.com/your-username/coregpt.git
+git clone https://github.com/Abhi-lash19/coregpt.git
 cd coregpt
 ```
 
@@ -124,9 +124,9 @@ python coregpt.py
 
 You’ll see:
 
-✔ Training loss
-✔ Validation loss
-✔ Generated text sample
+- Training loss for each epoch  
+- Validation loss for monitoring generalization  
+- A sample of generated text after training completes 
 
 ---
 
@@ -147,14 +147,14 @@ The focus is clarity over scale.
 
 ## How This Differs from Real LLMs
 
-Real models like GPT-4 or Claude add:
+Large language models such as GPT-4 or Claude are built with:
 
 * Billions of parameters
-* Massive datasets
-* Optimized training infrastructure
-* Alignment and safety layers
+* Extremely large training datasets
+* Highly optimized training systems
+* Additional alignment and safety components
 
-CoreGPT instead shows the **core algorithmic ideas** in a simple and transparent way.
+CoreGPT is much smaller and simpler. Its goal is to demonstrate the main ideas behind transformer language models in a clear and easy-to-understand way.
 
 ---
 
@@ -362,9 +362,9 @@ Even though the model is small, the same principles scale up to large-scale LLMs
 
 Building CoreGPT shows that language models are not magic — they are a sequence of mathematical operations that:
 
-✔ represent text numerically
-✔ learn contextual relationships
-✔ refine patterns through layers
-✔ predict the next token step by step
+- represent text numerically
+- learn contextual relationships
+- refine patterns through layers
+- predict the next token step by step
 
 Understanding these mechanics provides strong intuition for how modern AI generates language.
