@@ -165,6 +165,25 @@ def apply_causal_mask(scores):
             scores[i][j] = -1e9
     return scores
 
+# =========================================================
+# LAYER NORMALIZATION (NEW)
+# =========================================================
+
+class LayerNorm:
+    def __init__(self, dim, eps=1e-5):
+        self.gamma = [1.0] * dim
+        self.beta = [0.0] * dim
+        self.eps = eps
+
+    def forward(self, x):
+        normalized = []
+        for row in x:
+            mean = sum(row) / len(row)
+            var = sum((v - mean) ** 2 for v in row) / len(row)
+            norm_row = [(v - mean) / math.sqrt(var + self.eps) for v in row]
+            norm_row = [self.gamma[i] * norm_row[i] + self.beta[i] for i in range(len(row))]
+            normalized.append(norm_row)
+        return normalized
 
 # =========================================================
 # POSITIONAL EMBEDDING (NEW)
@@ -300,8 +319,13 @@ class TinyLanguageModel:
     def __init__(self, vocab_size):
         self.token_embedding = Embedding(vocab_size, Config.embed_dim)
         self.pos_embedding = PositionalEmbedding(Config.block_size, Config.embed_dim)
+
+        self.ln1 = LayerNorm(Config.embed_dim)
         self.attention = MultiHeadAttention(Config.embed_dim, num_heads=2)
+
+        self.ln2 = LayerNorm(Config.embed_dim)
         self.ffn = FeedForward(Config.embed_dim)
+
         self.linear = Linear(Config.embed_dim, vocab_size)
 
     def forward(self, tokens):
@@ -309,10 +333,14 @@ class TinyLanguageModel:
         pos_emb = self.pos_embedding.forward(len(tokens))
 
         x = [[tok_emb[i][j] + pos_emb[i][j] for j in range(len(tok_emb[i]))] for i in range(len(tokens))]
-        attn_out = self.attention.forward(x)
+        # attention block
+        x_norm = self.ln1.forward(x)
+        attn_out = self.attention.forward(x_norm)
         x = [[x[i][j] + attn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
 
-        ffn_out = self.ffn.forward(x)
+        # feed forward block
+        x_norm = self.ln2.forward(x)
+        ffn_out = self.ffn.forward(x_norm)
         x = [[x[i][j] + ffn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
 
         logits = self.linear.forward(x)
@@ -323,10 +351,12 @@ class TinyLanguageModel:
         pos_emb = self.pos_embedding.forward(len(tokens))
 
         x = [[tok_emb[i][j] + pos_emb[i][j] for j in range(len(tok_emb[i]))] for i in range(len(tokens))]
-        attn_out = self.attention.forward(x)
+        x_norm = self.ln1.forward(x)
+        attn_out = self.attention.forward(x_norm)
         x = [[x[i][j] + attn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
 
-        ffn_out = self.ffn.forward(x)
+        x_norm = self.ln2.forward(x)
+        ffn_out = self.ffn.forward(x_norm)
         x = [[x[i][j] + ffn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
 
         logits = self.linear.forward(x)
