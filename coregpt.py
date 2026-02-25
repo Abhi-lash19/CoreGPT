@@ -423,6 +423,35 @@ def train_step(model, x, y, lr=1e-2):
 
     return loss
 
+# =========================================================
+# TRAIN LOOP (EPOCH TRAINING)
+# =========================================================
+
+def evaluate(model, data, tokenizer=None):
+    """Compute validation loss on random batch."""
+    xb, yb = get_batch(data, Config.block_size, 1)
+    logits = model.forward(xb[0])
+    return cross_entropy_loss(logits, yb[0])
+
+
+def train_model(model, train_data, val_data, epochs=5, steps_per_epoch=200):
+    """
+    Realistic training loop with validation monitoring.
+    """
+    for epoch in range(epochs):
+
+        total_loss = 0.0
+
+        for step in range(steps_per_epoch):
+            xb, yb = get_batch(train_data, Config.block_size, 1)
+            loss = train_step(model, xb[0], yb[0])
+            total_loss += loss
+
+        avg_train_loss = total_loss / steps_per_epoch
+        val_loss = evaluate(model, val_data)
+
+        print(f"[Epoch {epoch+1}] train_loss={avg_train_loss:.4f} | val_loss={val_loss:.4f}")
+
 
 # =========================================================
 # GENERATION
@@ -462,37 +491,24 @@ def generate_text(model, tokenizer, prompt, max_new_tokens=100, temperature=1.0)
 # =========================================================
 
 def main(verbose: bool = True):
-    if verbose:
-        print("\n=== CoreGPT Phase 7 ===\n")
+    print("\n=== CoreGPT Phase 13 ===\n")
 
-    # 1️Load dataset
     text = load_dataset(Config.dataset_path)
-
-    # 2️Build tokenizer
     tokenizer = CharTokenizer(text)
-    # 3️Encode entire dataset
     data = tokenizer.encode(text)
 
-    train_data, _ = train_val_split(data)
-
-    # 5️ Sample batch from train set (single sample for training step)
-    xb, yb = get_batch(train_data, Config.block_size, 1)
-
-    # preview after batch exists
-    
+    train_data, val_data = train_val_split(data)
 
     model = TinyLanguageModel(tokenizer.vocab_size)
-    logits = model.forward(xb[0])
-    print(tokenizer.decode(xb[0][:50]))
 
-    # 6️ Initialize model
-    model = TinyLanguageModel(tokenizer.vocab_size)
-
-    for step in range(1000):
-        xb, yb = get_batch(train_data, Config.block_size, 1)
-        loss = train_step(model, xb[0], yb[0])
-        if step % 50 == 0:
-            print(f"[Step {step}] loss = {loss:.4f}")
+    # run training
+    train_model(
+        model,
+        train_data,
+        val_data,
+        epochs=Config.epochs,
+        steps_per_epoch=200
+    )
 
     print("\n--- Generated Text ---\n")
     output = generate_text(model, tokenizer, "CoreGPT ", 200, temperature=0.6)
