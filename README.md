@@ -357,3 +357,7 @@ Text → Tokens → Vectors → Attention → Reasoning Layers → Prediction �
 Even though the model is small, the same principles scale up to large-scale LLMs used in real-world AI systems.
 
 ---
+
+https://deepwiki.com/Abhi-lash19/CoreGPT
+
+---
