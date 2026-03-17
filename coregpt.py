@@ -6,6 +6,7 @@ Small transformer-based language model implementation for learning and experimen
 
 import os
 import random
+import json
 import math
 from typing import List, Tuple
 from config import Config
@@ -501,6 +502,42 @@ def evaluate(model, data, tokenizer=None):
     logits = model.forward(xb[0])
     return cross_entropy_loss(logits, yb[0])
 
+def save_checkpoint(model, path):
+    """
+    Save model weights to a JSON file.
+    Automatically creates directory if needed.
+    """
+    # create directory if it doesn't exist
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+
+    data = {
+        "embedding": model.token_embedding.weight,
+        "linear_weight": model.linear.weight,
+        "linear_bias": model.linear.bias,
+    }
+
+    with open(path, "w") as f:
+        json.dump(data, f)
+
+    print(f"[Checkpoint] Saved → {path}")
+
+
+def load_checkpoint(model, path):
+    """
+    Load model weights if checkpoint exists.
+    """
+    if not os.path.exists(path):
+        print("[Checkpoint] No checkpoint found, starting fresh.")
+        return
+
+    with open(path, "r") as f:
+        data = json.load(f)
+
+    model.token_embedding.weight = data["embedding"]
+    model.linear.weight = data["linear_weight"]
+    model.linear.bias = data["linear_bias"]
+
+    print(f"[Checkpoint] Loaded ← {path}")
 
 def train_model(model, train_data, val_data, epochs=5, steps_per_epoch=200):
     """
@@ -517,6 +554,7 @@ def train_model(model, train_data, val_data, epochs=5, steps_per_epoch=200):
 
             if step % 20 == 0:
                 print(f"[Epoch {epoch+1} | Step {step}/{steps_per_epoch}] loss={loss:.4f}")
+                save_checkpoint(model, Config.checkpoint_path)
 
         avg_train_loss = total_loss / steps_per_epoch
         val_loss = evaluate(model, val_data)
@@ -582,6 +620,9 @@ def main(verbose: bool = True):
     train_data, val_data = train_val_split(data)
 
     model = TinyLanguageModel(tokenizer.vocab_size)
+
+    # load checkpoint if available
+    load_checkpoint(model, Config.checkpoint_path)
 
     # run training
     train_model(
