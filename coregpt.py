@@ -121,13 +121,43 @@ def random_matrix(rows, cols):
 
 
 def matmul(a, b):
-    """Simple matrix multiplication (pure Python)."""
+    """Optimized matrix multiplication (faster loop order)."""
     result = [[0.0 for _ in range(len(b[0]))] for _ in range(len(a))]
+
     for i in range(len(a)):
-        for j in range(len(b[0])):
-            for k in range(len(b)):
-                result[i][j] += a[i][k] * b[k][j]
+        for k in range(len(b)):
+            aik = a[i][k]   # cache value (important optimization)
+            for j in range(len(b[0])):
+                result[i][j] += aik * b[k][j]
+
     return result
+
+
+# =========================================================
+# DROPOUT (NEW)
+# =========================================================
+
+def dropout(x, p):
+    """
+    Apply dropout to a matrix.
+
+    Each value has probability p of being set to 0.
+    This is used during training to improve generalization.
+    """
+    if p <= 0:
+        return x
+
+    out = []
+    for row in x:
+        new_row = []
+        for v in row:
+            if random.random() < p:
+                new_row.append(0.0)
+            else:
+                new_row.append(v)
+        out.append(new_row)
+
+    return out
 
 
 # =========================================================
@@ -336,8 +366,8 @@ class FeedForward:
 class TransformerBlock:
     """
     One transformer layer:
-    LayerNorm → Attention → Residual
-    LayerNorm → FFN → Residual
+    LayerNorm → Attention → Dropout → Residual
+    LayerNorm → FFN → Dropout → Residual
     """
 
     def __init__(self):
@@ -351,11 +381,21 @@ class TransformerBlock:
         # attention with residual
         x_norm = self.ln1.forward(x)
         attn_out = self.attn.forward(x_norm)
+
+        # Apply dropout to attention output
+        attn_out = dropout(attn_out, Config.dropout)
+
+        # Residual connection
         x = [[x[i][j] + attn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
 
         # ffn with residual
         x_norm = self.ln2.forward(x)
         ffn_out = self.ffn.forward(x_norm)
+
+        # Apply dropout to FFN output
+        ffn_out = dropout(ffn_out, Config.dropout)
+
+        # Residual connection
         x = [[x[i][j] + ffn_out[i][j] for j in range(len(x[i]))] for i in range(len(x))]
 
         return x
@@ -475,6 +515,9 @@ def train_model(model, train_data, val_data, epochs=5, steps_per_epoch=200):
             loss = train_step(model, xb[0], yb[0])
             total_loss += loss
 
+            if step % 20 == 0:
+                print(f"[Epoch {epoch+1} | Step {step}/{steps_per_epoch}] loss={loss:.4f}")
+
         avg_train_loss = total_loss / steps_per_epoch
         val_loss = evaluate(model, val_data)
 
@@ -485,18 +528,29 @@ def train_model(model, train_data, val_data, epochs=5, steps_per_epoch=200):
 # TEXT GENERATION
 # =========================================================
 
-def sample_next_token(logits, temperature=1.0):
+def sample_next_token(logits, temperature=1.0, top_k=5):
     """Sample from probability distribution with temperature."""
     scaled = [v / temperature for v in logits]
     probs = softmax(scaled)
 
+    # get top-k indices
+    sorted_indices = sorted(range(len(probs)), key=lambda i: probs[i], reverse=True)
+    top_indices = sorted_indices[:top_k]
+
+    # normalize top-k probs
+    top_probs = [probs[i] for i in top_indices]
+    s = sum(top_probs)
+    top_probs = [p / s for p in top_probs]
+
+    # sample
     r = random.random()
     cumulative = 0.0
-    for i, p in enumerate(probs):
+    for i, p in zip(top_indices, top_probs):
         cumulative += p
         if r < cumulative:
             return i
-    return len(probs) - 1
+
+    return top_indices[-1]
 
 
 def generate_text(model, tokenizer, prompt, max_new_tokens=100, temperature=1.0):
@@ -539,7 +593,7 @@ def main(verbose: bool = True):
     )
 
     print("\n--- Generated Text ---\n")
-    output = generate_text(model, tokenizer, "CoreGPT ", 200, temperature=0.6)
+    output = generate_text(model, tokenizer, "The model ", 200, temperature=0.6)
     print(output)
 
 
