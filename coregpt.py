@@ -135,7 +135,7 @@ def matmul(a, b):
 
 
 # =========================================================
-# DROPOUT (NEW)
+# DROPOUT
 # =========================================================
 
 def dropout(x, p):
@@ -334,10 +334,20 @@ class Linear:
         return out
 
 
-def relu(x):
-    """ReLU activation."""
-    return [[max(0.0, v) for v in row] for row in x]
 
+def gelu(x):
+    """
+    GELU activation (approximation used in GPT).
+    More smooth than ReLU and improves training stability.
+    """
+    out = []
+    for row in x:
+        new_row = []
+        for v in row:
+            val = 0.5 * v * (1.0 + math.tanh(math.sqrt(2.0 / math.pi) * (v + 0.044715 * v * v * v)))
+            new_row.append(val)
+        out.append(new_row)
+    return out
 
 # =========================================================
 # FEED-FORWARD NETWORK
@@ -355,7 +365,7 @@ class FeedForward:
 
     def forward(self, x):
         x = self.fc1.forward(x)
-        x = relu(x)
+        x = gelu(x)
         x = self.fc2.forward(x)
         return x
 
